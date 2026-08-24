@@ -1,30 +1,76 @@
-### Context
-The NIFTY 50 is a benchmark Indian stock market index that represents the weighted average of 50 of the largest Indian companies listed on the National Stock Exchange. It is one of the two main stock indices used in India, the other being the BSE SENSEX.
+# Stock Market Next-Day Prediction
 
-The NIFTY 50 index is a free-float market capitalization weighted index. The index was initially calculated on a full market capitalization methodology. The Nifty 50 index was launched on 22 April 1996 and is one of the many stock indices of Nifty. The base value of the index has been set at 1000 and a base capital of ₹ 2.06 trillions.
+## Project Overview
 
-### Content
-The data is the price history and trading volumes of the fifty stocks in the NIFTY 50 index from NSE (National Stock Exchange) India. All datasets are at a day-level with pricing and trading values split across .csv files for each year along with a metadata file with some macro-information about the stocks itself. The data spans from 1st January, 2016 to current month. 
+This project uses machine learning to predict the next-day movement of stock prices based on historical market data.
 
-Each file represents a year and has the following columns
-- timestamp - date of observation
-- symbol - stock ticker symbol
-- open - open value of the stocks on that day
-- high - highest value of the stocks on that day
-- low - lowest value of the stocks on that day
-- close - closing value of the stocks on that day
-- previous_close - previous day closing value of the stocks
-- volume - total traded volume of the stocks on that day
-- turnover - total traded value of the stocks on that day
+The main objective is to classify whether a stock is likely to move significantly upward on the next trading day.
 
-### Update Frequency
-Since new stock market data is generated and made available every day, in order to have the latest and most useful information, the dataset will be updated once a month.
+## Target Definition
 
-### Acknowledgements
-This data was extracted from daily report of cm_bhavcopy and cm_udiff_bhavcopy provided by National Stock Exchange of India Limited (NSE). [Data source link](https://www.nseindia.com/all-reports).
+The target was created using the next-day return.
 
-### Inspiration
-Various machine learning techniques can be applied and explored to stock market data, especially for trading algorithms and learning time series models.
+A day was classified as:
 
-### Important Note
-Nifty 50 member list is updated from time to time. The data was generated at 5 Jan, 2026 according to the index.
+- `1` → Next-day return > 0.25%
+- `0` → Next-day return <= 0.25%
+
+## Dataset
+
+The dataset contains historical stock market data from 2016 to 2026.
+
+The data was organized year-wise and processed before model development.
+
+## Feature Engineering
+
+Several technical features were created, including:
+
+- Daily Return
+- Moving Average
+- Price vs Moving Average
+- High-Low Range
+- Volume Ratio
+- Rolling Volatility
+- Lagged Returns
+- Return Momentum
+- Rolling Returns
+
+## Machine Learning
+
+Different experiments were performed using Random Forest based approaches.
+
+The experiments included:
+
+- Original Random Forest
+- K-Means + Random Forest
+- 0.25% Target Experiment
+- Balanced Random Forest
+- Momentum-based Features
+
+## Final Evaluation
+
+The final model was evaluated on an unseen 2025 test period.
+
+### Final Test Results
+
+| Metric | Score |
+|---|---:|
+| Accuracy | 42.35% |
+| ROC-AUC | 0.5215 |
+
+The results show that predicting short-term stock movements is a difficult problem and the current model has limited predictive power.
+
+## Project Structure
+
+```text
+NIFTY-50-Stock-Market-Data-main/
+│
+├── data/
+│   ├── 2016.csv
+│   ├── 2017.csv
+│   ├── ...
+│   └── 2026.csv
+│
+├── Stock_market.ipynb
+├── README.md
+└── .gitignores
