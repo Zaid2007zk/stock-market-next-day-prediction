@@ -2,3 +2,4 @@
 __pycache__/**
 *.py
 *.json
+final_stock_model.joblib
