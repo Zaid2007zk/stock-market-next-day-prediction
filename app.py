@@ -202,16 +202,15 @@ def load_model():
 @st.cache_data(ttl=900)
 def download_stock_data(ticker):
 
-    data = yf.download(
-        ticker,
+    stock = yf.Ticker(ticker)
+
+    data = stock.history(
         period="1y",
         interval="1d",
-        auto_adjust=False,
-        progress=False
+        auto_adjust=False
     )
 
     if data.empty:
-
         raise ValueError(
             f"No market data was returned for {ticker}."
         )
