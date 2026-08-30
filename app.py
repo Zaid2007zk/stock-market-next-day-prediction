@@ -2,12 +2,15 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+import yfinance as yf
 import plotly.graph_objects as go
 from pathlib import Path
+from datetime import timedelta
 
 
 # ============================================================
 # MARKETPULSE
+# Live market data + next-day prediction
 # ============================================================
 
 st.set_page_config(
@@ -24,19 +27,75 @@ st.set_page_config(
 
 BASE_DIR = Path(__file__).resolve().parent
 
-DATA_DIR = BASE_DIR / "data"
-
 MODEL_PATH = BASE_DIR / "final_stock_model_50trees.joblib"
 
 
 # ============================================================
-# PROFESSIONAL DARK UI
+# STOCK LIST
+# Quick-select list. User can also enter ANY NSE ticker.
+# ============================================================
+
+NIFTY_50 = {
+    "ADANIENT": "ADANIENT.NS",
+    "ADANIPORTS": "ADANIPORTS.NS",
+    "APOLLOHOSP": "APOLLOHOSP.NS",
+    "ASIANPAINT": "ASIANPAINT.NS",
+    "AXISBANK": "AXISBANK.NS",
+    "BAJAJ-AUTO": "BAJAJ-AUTO.NS",
+    "BAJFINANCE": "BAJFINANCE.NS",
+    "BAJAJFINSV": "BAJAJFINSV.NS",
+    "BEL": "BEL.NS",
+    "BHARTIARTL": "BHARTIARTL.NS",
+    "CIPLA": "CIPLA.NS",
+    "COALINDIA": "COALINDIA.NS",
+    "DRREDDY": "DRREDDY.NS",
+    "EICHERMOT": "EICHERMOT.NS",
+    "ETERNAL": "ETERNAL.NS",
+    "GRASIM": "GRASIM.NS",
+    "HCLTECH": "HCLTECH.NS",
+    "HDFCBANK": "HDFCBANK.NS",
+    "HDFCLIFE": "HDFCLIFE.NS",
+    "HEROMOTOCO": "HEROMOTOCO.NS",
+    "HINDALCO": "HINDALCO.NS",
+    "HINDUNILVR": "HINDUNILVR.NS",
+    "ICICIBANK": "ICICIBANK.NS",
+    "INDUSINDBK": "INDUSINDBK.NS",
+    "INFY": "INFY.NS",
+    "ITC": "ITC.NS",
+    "JIOFIN": "JIOFIN.NS",
+    "JSWSTEEL": "JSWSTEEL.NS",
+    "KOTAKBANK": "KOTAKBANK.NS",
+    "LT": "LT.NS",
+    "M&M": "M&M.NS",
+    "MARUTI": "MARUTI.NS",
+    "MAXHEALTH": "MAXHEALTH.NS",
+    "NESTLEIND": "NESTLEIND.NS",
+    "NTPC": "NTPC.NS",
+    "ONGC": "ONGC.NS",
+    "POWERGRID": "POWERGRID.NS",
+    "RELIANCE": "RELIANCE.NS",
+    "SBILIFE": "SBILIFE.NS",
+    "SBIN": "SBIN.NS",
+    "SHRIRAMFIN": "SHRIRAMFIN.NS",
+    "SUNPHARMA": "SUNPHARMA.NS",
+    "TATACONSUM": "TATACONSUM.NS",
+    "TATASTEEL": "TATASTEEL.NS",
+    "TCS": "TCS.NS",
+    "TECHM": "TECHM.NS",
+    "TITAN": "TITAN.NS",
+    "TRENT": "TRENT.NS",
+    "ULTRACEMCO": "ULTRACEMCO.NS",
+    "WIPRO": "WIPRO.NS"
+}
+
+
+# ============================================================
+# UI
 # ============================================================
 
 st.markdown(
     """
     <style>
-
     .stApp {
         background:
             radial-gradient(
@@ -98,10 +157,6 @@ st.markdown(
         border-radius: 10px;
     }
 
-    div[data-baseweb="select"] > div:hover {
-        border-color: #38BDF8;
-    }
-
     .stButton > button {
         width: 100%;
         height: 54px;
@@ -116,24 +171,6 @@ st.markdown(
         font-size: 15px;
         font-weight: 750;
         letter-spacing: 0.5px;
-        box-shadow:
-            0 8px 25px rgba(14, 165, 233, 0.18);
-    }
-
-    .stButton > button:hover {
-        border-color: #7DD3FC;
-        box-shadow:
-            0 12px 32px rgba(14, 165, 233, 0.28);
-    }
-
-    [data-testid="stExpander"] {
-        border: 1px solid #24344A;
-        border-radius: 12px;
-        background: rgba(9, 15, 25, 0.55);
-    }
-
-    hr {
-        border-color: #1B2A3D !important;
     }
 
     </style>
@@ -143,39 +180,84 @@ st.markdown(
 
 
 # ============================================================
-# LOAD MARKET DATA
+# LOAD MODEL
 # ============================================================
 
-@st.cache_data
-def load_market_data():
+@st.cache_resource
+def load_model():
 
-    csv_files = sorted(
-        DATA_DIR.glob("*.csv")
-    )
+    if not MODEL_PATH.exists():
 
-    if not csv_files:
         raise FileNotFoundError(
-            "No CSV files found inside the data folder."
+            "final_stock_model_50trees.joblib was not found."
         )
 
-    frames = []
+    return joblib.load(MODEL_PATH)
 
-    for file in csv_files:
 
-        frames.append(
-            pd.read_csv(file)
-        )
+# ============================================================
+# DOWNLOAD LIVE DATA
+# ============================================================
 
-    data = pd.concat(
-        frames,
-        ignore_index=True
+@st.cache_data(ttl=900)
+def download_stock_data(ticker):
+
+    data = yf.download(
+        ticker,
+        period="1y",
+        interval="1d",
+        auto_adjust=False,
+        progress=False
     )
 
-    if "Unnamed: 0" in data.columns:
+    if data.empty:
 
-        data = data.drop(
-            columns=["Unnamed: 0"]
+        raise ValueError(
+            f"No market data was returned for {ticker}."
         )
+
+    # yfinance can return MultiIndex columns.
+    if isinstance(data.columns, pd.MultiIndex):
+
+        data.columns = data.columns.get_level_values(0)
+
+    data = data.reset_index()
+
+    # Rename columns to the names used by the model.
+    data = data.rename(
+        columns={
+            "Date": "timestamp",
+            "Open": "open",
+            "High": "high",
+            "Low": "low",
+            "Close": "close",
+            "Volume": "volume"
+        }
+    )
+
+    required = [
+        "timestamp",
+        "high",
+        "low",
+        "close",
+        "volume"
+    ]
+
+    missing = [
+        column
+        for column in required
+        if column not in data.columns
+    ]
+
+    if missing:
+
+        raise ValueError(
+            f"Missing columns from market data: {missing}"
+        )
+
+    data = data[
+        required
+    ].copy()
 
     data["timestamp"] = pd.to_datetime(
         data["timestamp"],
@@ -185,61 +267,57 @@ def load_market_data():
     data = data.dropna(
         subset=[
             "timestamp",
-            "symbol"
+            "close",
+            "high",
+            "low",
+            "volume"
         ]
     )
 
     data = data.sort_values(
-        [
-            "symbol",
-            "timestamp"
-        ]
+        "timestamp"
     )
 
-    data = data.reset_index(
+    data = data.drop_duplicates(
+        "timestamp"
+    )
+
+    return data.reset_index(
         drop=True
     )
-
-    return data
 
 
 # ============================================================
 # FEATURE ENGINEERING
+# EXACT SAME SIX FEATURES USED BY THE MODEL
 # ============================================================
 
-@st.cache_data
 def build_features(data):
 
     data = data.copy()
 
     data["daily_return"] = (
-        data.groupby("symbol")["close"]
+        data["close"]
         .pct_change()
         * 100
     )
 
     data["ma_10"] = (
-        data.groupby("symbol")["close"]
-        .transform(
-            lambda x:
-            x.rolling(10).mean()
-        )
+        data["close"]
+        .rolling(10)
+        .mean()
     )
 
     data["volatility_10"] = (
-        data.groupby("symbol")["daily_return"]
-        .transform(
-            lambda x:
-            x.rolling(10).std()
-        )
+        data["daily_return"]
+        .rolling(10)
+        .std()
     )
 
     data["avg_volume_10"] = (
-        data.groupby("symbol")["volume"]
-        .transform(
-            lambda x:
-            x.rolling(10).mean()
-        )
+        data["volume"]
+        .rolling(10)
+        .mean()
     )
 
     data["volume_ratio"] = (
@@ -272,42 +350,32 @@ def build_features(data):
 
 
 # ============================================================
+# NEXT WEEKDAY
+# ============================================================
+
+def next_weekday(date_value):
+
+    next_date = date_value + timedelta(days=1)
+
+    while next_date.weekday() >= 5:
+
+        next_date += timedelta(days=1)
+
+    return next_date
+
+
+# ============================================================
 # LOAD MODEL
 # ============================================================
 
-@st.cache_resource
-def load_model():
-
-    if not MODEL_PATH.exists():
-
-        raise FileNotFoundError(
-            "final_stock_model_50trees.joblib "
-            "was not found beside marketpulse.py."
-        )
-
-    return joblib.load(
-        MODEL_PATH
-    )
-
-
-# ============================================================
-# INITIALIZE
-# ============================================================
-
 try:
-
-    market_data = load_market_data()
-
-    market_data = build_features(
-        market_data
-    )
 
     model = load_model()
 
 except Exception as error:
 
     st.error(
-        f"Application error: {error}"
+        f"Model loading error: {error}"
     )
 
     st.stop()
@@ -333,14 +401,6 @@ st.write("")
 st.subheader("Market Scanner")
 
 
-symbols = sorted(
-    market_data["symbol"]
-    .dropna()
-    .unique()
-    .tolist()
-)
-
-
 scanner1, scanner2, scanner3 = st.columns(
     [2.3, 0.7, 1.0]
 )
@@ -348,49 +408,94 @@ scanner1, scanner2, scanner3 = st.columns(
 
 with scanner1:
 
-    selected_symbol = st.selectbox(
+    selected_name = st.selectbox(
         "Select Stock",
-        symbols,
-        index=0
+        sorted(NIFTY_50.keys())
     )
 
 
 with scanner2:
 
     st.metric(
-        "Stocks",
-        len(symbols)
+        "Quick Stocks",
+        len(NIFTY_50)
     )
 
 
 with scanner3:
 
-    latest_global_date = (
-        market_data["timestamp"].max()
-    )
-
     st.metric(
-        "Data Through",
-        latest_global_date.strftime(
-            "%d %b %Y"
-        )
+        "Data",
+        "LIVE"
     )
 
 
 # ============================================================
-# SELECT STOCK
+# CUSTOM STOCK OPTION
 # ============================================================
 
-stock_data = market_data[
-    market_data["symbol"]
-    ==
-    selected_symbol
-].copy()
+with st.expander(
+    "Want another stock? Enter NSE ticker"
+):
+
+    custom_symbol = st.text_input(
+        "NSE ticker",
+        placeholder="Example: IRCTC"
+    ).strip().upper()
+
+    st.caption(
+        "Example: IRCTC → IRCTC.NS"
+    )
+
+
+if custom_symbol:
+
+    display_symbol = custom_symbol
+
+    ticker = (
+        custom_symbol
+        if custom_symbol.endswith(".NS")
+        else custom_symbol + ".NS"
+    )
+
+else:
+
+    display_symbol = selected_name
+
+    ticker = NIFTY_50[selected_name]
 
 
 # ============================================================
-# REMOVE INVALID FEATURE ROWS
+# DOWNLOAD CURRENT MARKET DATA
 # ============================================================
+
+with st.spinner(
+    f"Fetching latest market data for {display_symbol}..."
+):
+
+    try:
+
+        raw_data = download_stock_data(
+            ticker
+        )
+
+    except Exception as error:
+
+        st.error(
+            f"Could not fetch {display_symbol}: {error}"
+        )
+
+        st.stop()
+
+
+# ============================================================
+# BUILD FEATURES
+# ============================================================
+
+market_data = build_features(
+    raw_data
+)
+
 
 required_features = [
     "daily_return",
@@ -402,25 +507,48 @@ required_features = [
 ]
 
 
-stock_data = stock_data.dropna(
+stock_data = market_data.dropna(
     subset=required_features
-)
+).copy()
 
 
 if stock_data.empty:
 
-    st.warning(
-        "Not enough historical data for this stock."
+    st.error(
+        "Not enough historical data to calculate the model features."
     )
 
     st.stop()
 
 
 # ============================================================
-# LATEST DATA
+# LATEST AVAILABLE TRADING DAY
 # ============================================================
 
 latest = stock_data.iloc[-1]
+
+latest_date = pd.Timestamp(
+    latest["timestamp"]
+)
+
+next_prediction_date = next_weekday(
+    latest_date.date()
+)
+
+
+# ============================================================
+# DATA THROUGH
+# ============================================================
+
+st.metric(
+    "Data Through",
+    latest_date.strftime("%d %b %Y")
+)
+
+st.caption(
+    f"Latest completed market session. "
+    f"Prediction target: {next_prediction_date.strftime('%d %b %Y')}."
+)
 
 
 # ============================================================
@@ -429,7 +557,9 @@ latest = stock_data.iloc[-1]
 
 st.write("")
 
-st.subheader("Market Snapshot")
+st.subheader(
+    f"Market Snapshot — {display_symbol}"
+)
 
 
 snapshot1, snapshot2, snapshot3, snapshot4 = st.columns(
@@ -469,15 +599,8 @@ with snapshot4:
     )
 
 
-st.caption(
-    f"Latest available market data for "
-    f"{selected_symbol}: "
-    f"{latest['timestamp'].strftime('%d %B %Y')}"
-)
-
-
 # ============================================================
-# 3D MARKET FEATURE SPACE
+# 3D FEATURE SPACE
 # ============================================================
 
 st.write("")
@@ -487,30 +610,15 @@ st.subheader(
 )
 
 st.caption(
-    "Recent market observations across Daily Return, "
-    "MA10 and Volatility."
+    "Recent observations across Daily Return, MA10 and Volatility."
 )
 
-
-# ------------------------------------------------------------
-# Use only recent observations.
-# No connecting lines.
-# No labels on every point.
-# ------------------------------------------------------------
 
 graph_data = stock_data.tail(40).copy()
 
 
-# ============================================================
-# 3D SCATTER
-# ============================================================
-
 fig = go.Figure()
 
-
-# ------------------------------------------------------------
-# Historical points.
-# ------------------------------------------------------------
 
 fig.add_trace(
     go.Scatter3d(
@@ -546,10 +654,6 @@ fig.add_trace(
 )
 
 
-# ------------------------------------------------------------
-# Current stock position.
-# ------------------------------------------------------------
-
 fig.add_trace(
     go.Scatter3d(
 
@@ -575,27 +679,10 @@ fig.add_trace(
             )
         ),
 
-        hovertemplate=(
-            "<b>CURRENT</b><br>"
-            "Daily Return: "
-            f"{latest['daily_return']:.2f}%"
-            "<br>"
-            "MA10: "
-            f"{latest['ma_10']:,.2f}"
-            "<br>"
-            "Volatility: "
-            f"{latest['volatility_10']:.2f}%"
-            "<extra></extra>"
-        ),
-
         showlegend=False
     )
 )
 
-
-# ============================================================
-# GRAPH LAYOUT
-# ============================================================
 
 fig.update_layout(
 
@@ -621,22 +708,19 @@ fig.update_layout(
         xaxis=dict(
             title="Daily Return (%)",
             gridcolor="#24364D",
-            zerolinecolor="#3B5068",
-            showbackground=False
+            zerolinecolor="#3B5068"
         ),
 
         yaxis=dict(
             title="MA10",
             gridcolor="#24364D",
-            zerolinecolor="#3B5068",
-            showbackground=False
+            zerolinecolor="#3B5068"
         ),
 
         zaxis=dict(
             title="Volatility (%)",
             gridcolor="#24364D",
-            zerolinecolor="#3B5068",
-            showbackground=False
+            zerolinecolor="#3B5068"
         ),
 
         camera=dict(
@@ -645,16 +729,10 @@ fig.update_layout(
                 y=1.45,
                 z=1.15
             )
-        ),
-
-        aspectmode="auto"
+        )
     )
 )
 
-
-# ============================================================
-# DISPLAY GRAPH
-# ============================================================
 
 st.plotly_chart(
     fig,
@@ -705,26 +783,18 @@ with st.expander(
 
 
 # ============================================================
-# RUN MARKET ANALYSIS
+# PREDICTION
 # ============================================================
 
 st.write("")
 
 run_prediction = st.button(
-    "RUN MARKET ANALYSIS",
+    "RUN NEXT-DAY ANALYSIS",
     use_container_width=True
 )
 
 
-# ============================================================
-# MODEL PREDICTION
-# ============================================================
-
 if run_prediction:
-
-    # --------------------------------------------------------
-    # Exact six features used by the trained model.
-    # --------------------------------------------------------
 
     model_input = pd.DataFrame(
         [[
@@ -735,6 +805,7 @@ if run_prediction:
             latest["price_vs_ma10"],
             latest["high_low_range"]
         ]],
+
         columns=[
             "daily_return",
             "ma_10",
@@ -746,21 +817,33 @@ if run_prediction:
     )
 
 
-    # --------------------------------------------------------
-    # Get UP probability.
-    # --------------------------------------------------------
+    # Get model probabilities.
+    probabilities = model.predict_proba(
+        model_input
+    )[0]
 
-    probability_up = float(
-        model.predict_proba(
-            model_input
-        )[0, 1]
+
+    # Get the class labels stored by the model.
+    classes = list(
+        model.classes_
     )
 
 
-    # --------------------------------------------------------
-    # DOWN probability.
-    # --------------------------------------------------------
+    # Find probability for class 1 (UP).
+    if 1 in classes:
 
+        probability_up = float(
+            probabilities[
+                classes.index(1)
+            ]
+        )
+
+    else:
+
+        probability_up = 0.0
+
+
+    # DOWN probability.
     probability_down = (
         1.0
         -
@@ -768,24 +851,13 @@ if run_prediction:
     )
 
 
-    # --------------------------------------------------------
-    # Decision.
-    #
-    # 50% means the larger probability wins.
-    # Example:
-    # UP   = 44%
-    # DOWN = 56%
-    # Final signal = DOWN
-    # --------------------------------------------------------
-
+    # Final model decision.
     prediction = int(
-        probability_up >= 0.50
+        model.predict(
+            model_input
+        )[0]
     )
 
-
-    # ========================================================
-    # SIGNAL
-    # ========================================================
 
     if prediction == 1:
 
@@ -811,43 +883,29 @@ if run_prediction:
     )
 
 
-    # ========================================================
-    # CLEAN NATIVE STREAMLIT RESULT
-    # ========================================================
-
     if signal == "UP":
 
         st.success(
             f"NEXT-DAY SIGNAL: UP\n\n"
-            f"Confidence: {confidence * 100:.2f}%"
+            f"Prediction target: "
+            f"{next_prediction_date.strftime('%d %b %Y')}\n\n"
+            f"Model confidence: "
+            f"{confidence * 100:.2f}%"
         )
 
     else:
 
         st.error(
             f"NEXT-DAY SIGNAL: DOWN\n\n"
-            f"Confidence: {confidence * 100:.2f}%"
+            f"Prediction target: "
+            f"{next_prediction_date.strftime('%d %b %Y')}\n\n"
+            f"Model confidence: "
+            f"{confidence * 100:.2f}%"
         )
 
 
     # ========================================================
-    # CONFIDENCE
-    # ========================================================
-
-    st.write("")
-
-    st.metric(
-        "Model Confidence",
-        f"{confidence * 100:.2f}%"
-    )
-
-    st.progress(
-        float(confidence)
-    )
-
-
-    # ========================================================
-    # PREDICTION PROBABILITY
+    # PROBABILITY
     # ========================================================
 
     st.write("")
@@ -870,7 +928,7 @@ if run_prediction:
         )
 
         st.progress(
-            float(probability_up)
+            probability_up
         )
 
 
@@ -882,7 +940,28 @@ if run_prediction:
         )
 
         st.progress(
-            float(probability_down)
+            probability_down
+        )
+
+
+    # ========================================================
+    # IMPORTANT MODEL NOTE
+    # ========================================================
+
+    if hasattr(
+        model,
+        "n_estimators"
+    ):
+
+        tree_count = int(
+            model.n_estimators
+        )
+
+        st.caption(
+            f"Probability comes directly from the "
+            f"{tree_count}-tree Random Forest. "
+            f"With {tree_count} trees, probability steps "
+            f"can be about {100 / tree_count:.1f} percentage points."
         )
 
 
@@ -893,8 +972,8 @@ if run_prediction:
     if signal == "UP":
 
         st.info(
-            f"The model indicates a higher probability "
-            f"of an upward next-day movement "
+            f"The model gives a higher probability of "
+            f"an upward next-day movement "
             f"({probability_up * 100:.2f}% vs "
             f"{probability_down * 100:.2f}%)."
         )
@@ -902,8 +981,8 @@ if run_prediction:
     else:
 
         st.warning(
-            f"The model indicates a higher probability "
-            f"of a downward next-day movement "
+            f"The model gives a higher probability of "
+            f"a downward next-day movement "
             f"({probability_down * 100:.2f}% vs "
             f"{probability_up * 100:.2f}%)."
         )
