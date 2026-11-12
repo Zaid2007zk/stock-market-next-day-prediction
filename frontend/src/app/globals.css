@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --tv-bg-base: #131722;
+  --tv-bg-surface: #1E222D;
+  --tv-bg-elevated: #2A2E39;
+  --tv-border: #2A2E39;
+  --tv-border-subtle: #1E222D;
+  --tv-text-primary: #D1D4DC;
+  --tv-text-secondary: #787B86;
+  --tv-text-muted: #50535E;
+  --tv-green: #089981;
+  --tv-green-hover: #067A67;
+  --tv-red: #F23645;
+  --tv-red-hover: #C9202F;
+  --tv-blue: #2962FF;
+  --tv-blue-hover: #1E53E5;
+}
+
+body {
+  color: #D1D4DC;
+  background-color: #131722;
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* TradingView / Webull Pro Cards */
+.tv-card {
+  background-color: #1E222D;
+  border: 1px solid #2A2E39;
+  border-radius: 8px;
+  transition: border-color 0.15s ease;
+}
+
+.tv-card:hover {
+  border-color: #363C4E;
+}
+
+.tv-panel {
+  background-color: #181C27;
+  border: 1px solid #2A2E39;
+}
+
+/* Button & Badge Utility Classes */
+.btn-tv-primary {
+  background-color: #2962FF;
+  color: #FFFFFF;
+  font-weight: 600;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+.btn-tv-primary:hover {
+  background-color: #1E53E5;
+}
+
+.btn-tv-buy {
+  background-color: #089981;
+  color: #FFFFFF;
+  font-weight: 700;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+.btn-tv-buy:hover {
+  background-color: #067A67;
+}
+
+.btn-tv-sell {
+  background-color: #F23645;
+  color: #FFFFFF;
+  font-weight: 700;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+.btn-tv-sell:hover {
+  background-color: #C9202F;
+}
+
+/* Pro Trading Terminal Tabular Monospace for Numbers */
+.font-tabular {
+  font-family: -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Clean Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #131722;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2A2E39;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #363C4E;
+}

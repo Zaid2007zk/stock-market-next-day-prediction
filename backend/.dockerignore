@@ -1,0 +1,39 @@
+# ==============================================================================
+# MarketPulse Backend Docker Ignore Rules
+# Strictly excludes baseline model files and root Streamlit application files
+# to prevent memory bloat and container build overhead on Render Free (512 MB RAM).
+# ==============================================================================
+
+# Model files (Must never be bundled in backend container)
+*.joblib
+final_stock_model.joblib
+final_stock_model_50trees.joblib
+
+# Root legacy Streamlit application
+app.py
+Stock_market.ipynb
+
+# Version control & dev containers
+.git/
+.github/
+.devcontainer/
+
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# Environment files
+.env
+.env.*
+
+# Logs and system files
+*.log
+.DS_Store
+Thumbs.db
