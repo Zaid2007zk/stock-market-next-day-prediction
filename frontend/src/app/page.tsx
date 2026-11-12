@@ -26,6 +26,11 @@ import { BrokerGatewayModal } from "@/components/trading/BrokerGatewayModal";
 import { SubscriptionModal } from "@/components/SubscriptionModal";
 import { SettingsModal, TerminalSettings } from "@/components/SettingsModal";
 import { SebiDisclaimerModal } from "@/components/SebiDisclaimerModal";
+import { OptionsChainModal } from "@/components/trading/OptionsChainModal";
+import { TradeJournalModal } from "@/components/trading/TradeJournalModal";
+import { MultiChartGrid } from "@/components/trading/MultiChartGrid";
+import { AlgoStrategyStudio } from "@/components/trading/AlgoStrategyStudio";
+import { soundEngine } from "@/utils/soundEngine";
 import {
   TrendingUp,
   ArrowUpRight,
@@ -353,6 +358,8 @@ export default function HomePage() {
   const [isSubscriptionOpen, setIsSubscriptionOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isSebiModalOpen, setIsSebiModalOpen] = useState<boolean>(false);
+  const [isOptionsChainOpen, setIsOptionsChainOpen] = useState<boolean>(false);
+  const [isTradeJournalOpen, setIsTradeJournalOpen] = useState<boolean>(false);
   const [availableMargin, setAvailableMargin] = useState<number>(1000000.0);
   const [positions, setPositions] = useState<ActivePosition[]>([]);
   const [orders, setOrders] = useState<ExecutedOrder[]>([]);
@@ -657,6 +664,7 @@ export default function HomePage() {
     setPositions(updatedPositions);
     setOrders(updatedOrders);
     saveTradingState(newMargin, updatedPositions, updatedOrders, activeBroker);
+    soundEngine.playOrderFilled();
   };
 
   // Square Off Handler
@@ -684,10 +692,12 @@ export default function HomePage() {
     setOrders(updatedOrds);
     setAvailableMargin(restoredMargin);
     saveTradingState(restoredMargin, updatedPos, updatedOrds, activeBroker);
+    soundEngine.playPositionClosed();
   };
 
   const handleSquareOffAll = () => {
     positions.forEach((p) => handleSquareOff(p.id));
+    soundEngine.playPositionClosed();
   };
 
   const utilizedMargin = positions.reduce(
@@ -712,6 +722,8 @@ export default function HomePage() {
         activeBroker={activeBroker}
         onOpenSubscription={() => setIsSubscriptionOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenOptionsChain={() => setIsOptionsChainOpen(true)}
+        onOpenTradeJournal={() => setIsTradeJournalOpen(true)}
       />
 
       {/* Streaming Live Marquee Tape */}
@@ -1165,6 +1177,20 @@ export default function HomePage() {
             <ThemeStudio />
           </div>
         )}
+
+        {/* Dedicated Multi-Chart Tactical Grid View */}
+        {activeTab === "multichart" && (
+          <div className="space-y-6">
+            <MultiChartGrid />
+          </div>
+        )}
+
+        {/* Dedicated Algorithmic Strategy Studio View */}
+        {activeTab === "algo" && (
+          <div className="space-y-6">
+            <AlgoStrategyStudio />
+          </div>
+        )}
       </main>
 
       {/* Subscription Plans Modal */}
@@ -1177,6 +1203,21 @@ export default function HomePage() {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+      />
+
+      {/* Options Chain & Greeks Modal */}
+      <OptionsChainModal
+        isOpen={isOptionsChainOpen}
+        onClose={() => setIsOptionsChainOpen(false)}
+        underlyingSymbol={currentStock.name}
+        currentPrice={currentStock.lastClose}
+      />
+
+      {/* Trade Performance Journal & Analytics Modal */}
+      <TradeJournalModal
+        isOpen={isTradeJournalOpen}
+        onClose={() => setIsTradeJournalOpen(false)}
+        currencySymbol={currentStock.currency === "INR" ? "₹" : "$"}
       />
 
       {/* Broker Gateway Configuration Modal */}

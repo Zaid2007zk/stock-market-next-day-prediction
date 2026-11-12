@@ -21,6 +21,10 @@ import {
   CreditCard,
   User,
   Sliders,
+  Layers,
+  BookOpen,
+  Cpu,
+  Grid,
 } from "lucide-react";
 import { AuthUser } from "./AuthModal";
 
@@ -33,7 +37,9 @@ export type NavTabType =
   | "backtest"
   | "paper"
   | "shariah"
-  | "theme";
+  | "theme"
+  | "multichart"
+  | "algo";
 
 interface NavbarProps {
   activeTab: NavTabType;
@@ -45,6 +51,8 @@ interface NavbarProps {
   activeBroker?: string;
   onOpenSubscription?: () => void;
   onOpenSettings?: () => void;
+  onOpenOptionsChain?: () => void;
+  onOpenTradeJournal?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -57,6 +65,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeBroker = "Zerodha Kite",
   onOpenSubscription,
   onOpenSettings,
+  onOpenOptionsChain,
+  onOpenTradeJournal,
 }) => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -183,11 +193,56 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Bookmark className="w-3.5 h-3.5" />
                 <span>Watchlist</span>
               </button>
+              <button
+                onClick={() => setActiveTab("multichart")}
+                className={`px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${
+                  activeTab === "multichart"
+                    ? "text-white bg-[#1E222D] font-semibold"
+                    : "hover:text-[#D1D4DC] hover:bg-[#1E222D]/60"
+                }`}
+              >
+                <Grid className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Multi-Chart</span>
+              </button>
+              <button
+                onClick={() => setActiveTab("algo")}
+                className={`px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${
+                  activeTab === "algo"
+                    ? "text-white bg-[#1E222D] font-semibold"
+                    : "hover:text-[#D1D4DC] hover:bg-[#1E222D]/60"
+                }`}
+              >
+                <Cpu className="w-3.5 h-3.5 text-amber-400" />
+                <span>Algo Studio</span>
+              </button>
             </nav>
           </div>
 
           {/* Right: Actions, Subscription, Settings & User Account */}
           <div className="flex items-center space-x-2 sm:space-x-2.5">
+            {/* Options Chain Quick Action */}
+            {onOpenOptionsChain && (
+              <button
+                onClick={onOpenOptionsChain}
+                title="Open F&O Options Chain & Greeks"
+                className="hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded bg-[#1E222D] border border-[#2A2E39] hover:border-[#363C4E] hover:text-white text-xs transition text-[#D1D4DC] cursor-pointer"
+              >
+                <Layers className="w-3.5 h-3.5 text-[#089981]" />
+                <span className="text-[12px] font-medium">Options</span>
+              </button>
+            )}
+
+            {/* Trade Journal Quick Action */}
+            {onOpenTradeJournal && (
+              <button
+                onClick={onOpenTradeJournal}
+                title="Performance Journal & Execution Log"
+                className="hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded bg-[#1E222D] border border-[#2A2E39] hover:border-[#363C4E] hover:text-white text-xs transition text-[#D1D4DC] cursor-pointer"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-purple-400" />
+                <span className="text-[12px] font-medium">Journal</span>
+              </button>
+            )}
             {/* Subscription / Pricing Button */}
             <button
               onClick={onOpenSubscription}
@@ -294,6 +349,38 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <div className="text-[10px] text-[#787B86]">{activeBroker}</div>
                         </div>
                       </button>
+
+                      {onOpenOptionsChain && (
+                        <button
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            onOpenOptionsChain();
+                          }}
+                          className="w-full text-left px-3 py-2 text-[#D1D4DC] hover:text-white hover:bg-[#2A2E39] flex items-center gap-2 transition"
+                        >
+                          <Layers className="w-4 h-4 text-emerald-400" />
+                          <div>
+                            <div className="font-medium">Options Chain &amp; Greeks</div>
+                            <div className="text-[10px] text-[#787B86]">Open Interest &amp; PCR Matrix</div>
+                          </div>
+                        </button>
+                      )}
+
+                      {onOpenTradeJournal && (
+                        <button
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            onOpenTradeJournal();
+                          }}
+                          className="w-full text-left px-3 py-2 text-[#D1D4DC] hover:text-white hover:bg-[#2A2E39] flex items-center gap-2 transition"
+                        >
+                          <BookOpen className="w-4 h-4 text-purple-400" />
+                          <div>
+                            <div className="font-medium">Performance Journal</div>
+                            <div className="text-[10px] text-[#787B86]">Review trades &amp; equity curve</div>
+                          </div>
+                        </button>
+                      )}
                     </div>
 
                     <div className="border-t border-[#2A2E39] py-1">

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { soundEngine } from "@/utils/soundEngine";
 import {
   X,
   Sliders,
@@ -67,6 +68,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleSave = () => {
     localStorage.setItem("marketpulse_terminal_settings", JSON.stringify(settings));
+    soundEngine.setEnabled(settings.soundAlerts);
     if (onSaveSettings) {
       onSaveSettings(settings);
     }
