@@ -47,60 +47,56 @@ import {
   Sliders,
 } from "lucide-react";
 
-// Deterministic, symbol-unique mock datasets for Indian & US stocks
+import RAW_STOCK_DATABASE from "../data/stock_database.json";
+
+// Realistic Geometric Brownian Motion generator for unknown/fallback symbols
 function generateMockBars(symbol: string, targetPrice: number, days: number = 260): OHLCVBar[] {
   const bars: OHLCVBar[] = [];
-  // Unique deterministic hash from symbol characters
   let seed = 0;
   for (let idx = 0; idx < symbol.length; idx++) {
     seed = (seed * 31 + symbol.charCodeAt(idx)) & 0xffffffff;
   }
   const uSeed = Math.abs(seed);
 
-  // Symbol-specific harmonic cycles and volatility parameters
-  const cycle1 = 0.04 + (uSeed % 11) * 0.012;
-  const cycle2 = 0.015 + ((uSeed >> 3) % 9) * 0.006;
-  const phase1 = (uSeed % 19) * 0.35;
-  const phase2 = ((uSeed >> 5) % 17) * 0.45;
-  const volatility = 0.007 + (uSeed % 13) * 0.0012;
-  const baseVol = 2000000 + (uSeed % 15) * 800000;
+  // Deterministic pseudo-random generator
+  let state = uSeed || 1234567;
+  const nextRand = () => {
+    state = (state * 1664525 + 1013904223) & 0xffffffff;
+    return (state >>> 0) / 4294967296;
+  };
 
-  // Generate relative price index walking backward from today
-  const relativePath: number[] = new Array(days).fill(0);
-  let cumulativeDrift = 0;
-  for (let i = 0; i < days; i++) {
-    const noiseRaw = Math.sin((uSeed + i * 137.5) * 12.9898) * 43758.5453;
-    const noise = (noiseRaw - Math.floor(noiseRaw)) - 0.5; // [-0.5, 0.5]
-    const macroCycle = Math.sin(i * cycle1 + phase1) * 0.07 + Math.cos(i * cycle2 + phase2) * 0.12;
-    cumulativeDrift += noise * volatility * 2.2;
-    relativePath[i] = macroCycle + cumulativeDrift;
+  // Box-Muller Gaussian shock
+  const nextGaussian = () => {
+    const u1 = Math.max(1e-7, nextRand());
+    const u2 = nextRand();
+    return Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+  };
+
+  const annualVol = 0.16 + (uSeed % 14) * 0.012;
+  const dailyVol = annualVol / Math.sqrt(252);
+  const drift = (0.06 + (uSeed % 8) * 0.01) / 252;
+
+  // Walk backward from today's targetPrice
+  const prices: number[] = new Array(days);
+  prices[days - 1] = targetPrice;
+  for (let i = days - 2; i >= 0; i--) {
+    const ret = drift + dailyVol * nextGaussian();
+    prices[i] = Math.max(targetPrice * 0.35, prices[i + 1] / (1 + ret));
   }
 
-  // Anchor final bar exactly to targetPrice (zero offset on today)
-  const finalOffset = relativePath[days - 1];
   const today = new Date("2026-11-13T00:00:00Z");
+  const baseVol = 1800000 + (uSeed % 15) * 450000;
 
   for (let i = 0; i < days; i++) {
     const dayOffset = days - 1 - i;
     const barDate = new Date(today.getTime() - dayOffset * 86400000);
-    const rawPct = relativePath[i] - finalOffset;
-    // Keep realistic bounded range between -35% and +35% of current price
-    const boundedPct = Math.max(-0.35, Math.min(0.40, rawPct));
-    const close = parseFloat((targetPrice * (1.0 + boundedPct)).toFixed(2));
-
-    // Realistic candlestick wicks and open
-    const candleNoise = Math.sin((uSeed + i * 73.1) * 7.123) * 1000;
-    const candleVariance = (candleNoise - Math.floor(candleNoise)) - 0.5;
-    const openOffset = (close * 0.008) * candleVariance;
-    const open = parseFloat((close - openOffset).toFixed(2));
-    
-    const wickHigh = close * (0.004 + Math.abs(candleVariance) * 0.01);
-    const wickLow = close * (0.004 + Math.abs(candleVariance) * 0.01);
-    const high = parseFloat((Math.max(open, close) + wickHigh).toFixed(2));
-    const low = parseFloat((Math.min(open, close) - wickLow).toFixed(2));
-
-    const volNoise = Math.sin(i * 0.4 + uSeed) * 0.4;
-    const volume = Math.floor(baseVol * (1 + volNoise));
+    const close = parseFloat(prices[i].toFixed(2));
+    const prevClose = i > 0 ? prices[i - 1] : close * 0.997;
+    const open = parseFloat((prevClose * (1 + nextGaussian() * 0.0025)).toFixed(2));
+    const wickSpread = close * dailyVol * 0.75;
+    const high = parseFloat((Math.max(open, close) + Math.abs(nextGaussian()) * wickSpread).toFixed(2));
+    const low = parseFloat((Math.min(open, close) - Math.abs(nextGaussian()) * wickSpread).toFixed(2));
+    const volume = Math.floor(baseVol * (0.65 + Math.abs(nextGaussian()) * 0.7));
 
     bars.push({
       timestamp: barDate.toISOString().split("T")[0],
@@ -142,242 +138,7 @@ interface StockOverviewData {
   timestamp?: string;
 }
 
-const STOCK_DATABASE: Record<string, StockOverviewData> = {
-  "RELIANCE.NS": {
-    symbol: "RELIANCE.NS",
-    name: "Reliance Industries Limited",
-    exchange: "NSE",
-    source: "NSE / Global Market Feed",
-    currency: "INR",
-    lastClose: 1337.30,
-    changePercent: 0.97,
-    openPrice: 1333.50,
-    highPrice: 1349.40,
-    lowPrice: 1330.10,
-    previousClose: 1324.40,
-    volume: 11126692,
-    rsi14: 58.4,
-    macd: 12.3,
-    macdSignal: 9.8,
-    sma20: 1320.5,
-    sma50: 1290.0,
-    volatility: 16.5,
-    sharpeRatio: 1.42,
-    peRatio: 24.8,
-    roe: 14.5,
-    bars: generateMockBars("RELIANCE.NS", 1337.30, 260),
-    isStale: false,
-    timestamp: "2026-11-12",
-  },
-  "TCS.NS": {
-    symbol: "TCS.NS",
-    name: "Tata Consultancy Services Limited",
-    exchange: "NSE",
-    source: "NSE / Global Market Feed",
-    currency: "INR",
-    lastClose: 2469.80,
-    changePercent: -0.45,
-    openPrice: 2480.00,
-    highPrice: 2495.00,
-    lowPrice: 2460.50,
-    previousClose: 2481.00,
-    volume: 2450000,
-    rsi14: 64.5,
-    macd: 28.5,
-    macdSignal: 22.1,
-    sma20: 2450.0,
-    sma50: 2410.0,
-    volatility: 14.8,
-    sharpeRatio: 1.35,
-    peRatio: 26.2,
-    roe: 48.0,
-    bars: generateMockBars("TCS.NS", 2469.80, 260),
-    isStale: false,
-    timestamp: "2026-11-12",
-  },
-  "HDFCBANK.NS": {
-    symbol: "HDFCBANK.NS",
-    name: "HDFC Bank Limited",
-    exchange: "NSE",
-    source: "NSE / Global Market Feed",
-    currency: "INR",
-    lastClose: 810.60,
-    changePercent: 0.52,
-    openPrice: 810.10,
-    highPrice: 817.85,
-    lowPrice: 808.00,
-    previousClose: 806.40,
-    volume: 15400000,
-    rsi14: 56.2,
-    macd: 4.8,
-    macdSignal: 3.9,
-    sma20: 805.0,
-    sma50: 790.0,
-    volatility: 15.2,
-    sharpeRatio: 1.38,
-    peRatio: 18.5,
-    roe: 16.4,
-    bars: generateMockBars("HDFCBANK.NS", 810.60, 260),
-    isStale: false,
-    timestamp: "2026-11-12",
-  },
-  "INFY.NS": {
-    symbol: "INFY.NS",
-    name: "Infosys Limited",
-    exchange: "NSE",
-    source: "NSE / Global Market Feed",
-    currency: "INR",
-    lastClose: 1153.60,
-    changePercent: -0.28,
-    openPrice: 1158.00,
-    highPrice: 1166.50,
-    lowPrice: 1148.00,
-    previousClose: 1156.80,
-    volume: 6800000,
-    rsi14: 52.8,
-    macd: 8.4,
-    macdSignal: 7.2,
-    sma20: 1145.0,
-    sma50: 1120.0,
-    volatility: 16.0,
-    sharpeRatio: 1.25,
-    peRatio: 25.1,
-    roe: 31.8,
-    bars: generateMockBars("INFY.NS", 1153.60, 260),
-    isStale: false,
-    timestamp: "2026-11-12",
-  },
-  "ICICIBANK.NS": {
-    symbol: "ICICIBANK.NS",
-    name: "ICICI Bank Limited",
-    exchange: "NSE",
-    source: "NSE / Global Market Feed",
-    currency: "INR",
-    lastClose: 1260.00,
-    changePercent: 0.85,
-    openPrice: 1252.00,
-    highPrice: 1268.00,
-    lowPrice: 1250.00,
-    previousClose: 1249.40,
-    volume: 8200000,
-    rsi14: 61.8,
-    macd: 9.4,
-    macdSignal: 7.1,
-    sma20: 1240.0,
-    sma50: 1210.0,
-    volatility: 15.5,
-    sharpeRatio: 1.45,
-    peRatio: 17.8,
-    roe: 18.5,
-    bars: generateMockBars("ICICIBANK.NS", 1260.00, 260),
-    isStale: false,
-    timestamp: "2026-11-12",
-  },
-  "SBIN.NS": {
-    symbol: "SBIN.NS",
-    name: "State Bank of India",
-    exchange: "NSE",
-    source: "NSE / Global Market Feed",
-    currency: "INR",
-    lastClose: 795.00,
-    changePercent: 0.65,
-    openPrice: 792.00,
-    highPrice: 802.00,
-    lowPrice: 790.00,
-    previousClose: 789.85,
-    volume: 12500000,
-    rsi14: 53.4,
-    macd: 4.2,
-    macdSignal: 3.8,
-    sma20: 785.0,
-    sma50: 770.0,
-    volatility: 18.2,
-    sharpeRatio: 1.20,
-    peRatio: 10.4,
-    roe: 17.2,
-    bars: generateMockBars("SBIN.NS", 795.00, 260),
-    isStale: false,
-    timestamp: "2026-11-12",
-  },
-  "ITC.NS": {
-    symbol: "ITC.NS",
-    name: "ITC Limited",
-    exchange: "NSE",
-    source: "NSE / Global Market Feed",
-    currency: "INR",
-    lastClose: 472.00,
-    changePercent: 0.25,
-    openPrice: 471.50,
-    highPrice: 476.00,
-    lowPrice: 469.50,
-    previousClose: 470.80,
-    volume: 9100000,
-    rsi14: 49.5,
-    macd: 1.8,
-    macdSignal: 2.1,
-    sma20: 470.0,
-    sma50: 465.0,
-    volatility: 13.5,
-    sharpeRatio: 1.10,
-    peRatio: 27.5,
-    roe: 28.5,
-    bars: generateMockBars("ITC.NS", 472.00, 260),
-    isStale: false,
-    timestamp: "2026-11-12",
-  },
-  "AAPL": {
-    symbol: "AAPL",
-    name: "Apple Inc.",
-    exchange: "NASDAQ",
-    source: "Global Market Feed",
-    currency: "USD",
-    lastClose: 348.50,
-    changePercent: 0.85,
-    openPrice: 346.20,
-    highPrice: 351.40,
-    lowPrice: 345.80,
-    previousClose: 345.56,
-    volume: 48500000,
-    rsi14: 63.8,
-    macd: 4.2,
-    macdSignal: 3.1,
-    sma20: 342.0,
-    sma50: 335.0,
-    volatility: 19.8,
-    sharpeRatio: 1.55,
-    peRatio: 33.2,
-    roe: 145.0,
-    bars: generateMockBars("AAPL", 348.50, 260),
-    isStale: false,
-    timestamp: "2026-11-12",
-  },
-  "MSFT": {
-    symbol: "MSFT",
-    name: "Microsoft Corporation",
-    exchange: "NASDAQ",
-    source: "Global Market Feed",
-    currency: "USD",
-    lastClose: 533.20,
-    changePercent: 1.12,
-    openPrice: 529.00,
-    highPrice: 536.80,
-    lowPrice: 528.50,
-    previousClose: 527.30,
-    volume: 21500000,
-    rsi14: 68.2,
-    macd: 8.5,
-    macdSignal: 6.9,
-    sma20: 525.0,
-    sma50: 510.0,
-    volatility: 18.5,
-    sharpeRatio: 1.62,
-    peRatio: 36.4,
-    roe: 38.5,
-    bars: generateMockBars("MSFT", 533.20, 260),
-    isStale: false,
-    timestamp: "2026-11-12",
-  },
-};
+const STOCK_DATABASE: Record<string, StockOverviewData> = RAW_STOCK_DATABASE as Record<string, StockOverviewData>;
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState<NavTabType>("overview");

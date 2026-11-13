@@ -40,25 +40,32 @@ export const PriceChart: React.FC<PriceChartProps> = ({
       const lastBar = bars[bars.length - 1];
       const intraday: OHLCVBar[] = [];
       const sessionCount = 25; // 25 15-minute intervals from 09:15 to 15:30
+      
       let cur = lastBar.open;
+      const dayRange = Math.max(0.5, lastBar.high - lastBar.low);
       for (let s = 0; s < sessionCount; s++) {
         const hour = 9 + Math.floor((15 + s * 15) / 60);
         const min = (15 + s * 15) % 60;
         const timeStr = `${hour.toString().padStart(2, "0")}:${min.toString().padStart(2, "0")}`;
         const progress = (s + 1) / sessionCount;
-        const target = lastBar.open + (lastBar.close - lastBar.open) * progress;
-        const noise = Math.sin(s * 0.7) * (lastBar.close * 0.003);
+        
+        // Realistic intraday path: morning action, midday consolidation, afternoon close
+        const arc = Math.sin(progress * Math.PI);
+        const target = lastBar.open + (lastBar.close - lastBar.open) * progress + (s < 12 ? -1 : 1) * arc * (dayRange * 0.12);
+        const stepNoise = (((s * 23) % 11) - 5) * (dayRange * 0.03);
         const o = cur;
-        const c = s === sessionCount - 1 ? lastBar.close : target + noise;
-        const h = Math.max(o, c) + Math.abs(noise) * 0.5;
-        const l = Math.min(o, c) - Math.abs(noise) * 0.5;
+        const c = s === sessionCount - 1 ? lastBar.close : parseFloat((target + stepNoise).toFixed(2));
+        const wick = dayRange * 0.05;
+        const h = parseFloat((Math.max(o, c) + wick).toFixed(2));
+        const l = parseFloat((Math.min(o, c) - wick).toFixed(2));
+        const volWeight = (s < 4 || s > 20) ? 1.45 : 0.72; // U-shaped market volume curve
         intraday.push({
           timestamp: `${lastBar.timestamp} ${timeStr}`,
-          open: parseFloat(o.toFixed(2)),
-          high: parseFloat(h.toFixed(2)),
-          low: parseFloat(l.toFixed(2)),
-          close: parseFloat(c.toFixed(2)),
-          volume: Math.floor((lastBar.volume / sessionCount) * (0.8 + Math.abs(Math.sin(s)) * 0.4)),
+          open: o,
+          high: Math.min(lastBar.high, Math.max(h, o, c)),
+          low: Math.max(lastBar.low, Math.min(l, o, c)),
+          close: c,
+          volume: Math.floor((lastBar.volume / sessionCount) * volWeight),
         });
         cur = c;
       }
