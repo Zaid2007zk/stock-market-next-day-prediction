@@ -37,6 +37,8 @@ jobs:
 
       - name: Build Next.js Static Export
         working-directory: ./frontend
+        env:
+          GITHUB_PAGES: "true"
         run: npm run build
 
       - name: Add .nojekyll to prevent Jekyll ignoring _next chunks
