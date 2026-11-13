@@ -30,6 +30,8 @@ import { OptionsChainModal } from "@/components/trading/OptionsChainModal";
 import { TradeJournalModal } from "@/components/trading/TradeJournalModal";
 import { MultiChartGrid } from "@/components/trading/MultiChartGrid";
 import { AlgoStrategyStudio } from "@/components/trading/AlgoStrategyStudio";
+import { AIPredictionBadge } from "@/components/AIPredictionBadge";
+import { FloatingAICopilot } from "@/components/FloatingAICopilot";
 import { soundEngine } from "@/utils/soundEngine";
 import {
   TrendingUp,
@@ -161,6 +163,8 @@ export default function HomePage() {
   const [isSebiModalOpen, setIsSebiModalOpen] = useState<boolean>(false);
   const [isOptionsChainOpen, setIsOptionsChainOpen] = useState<boolean>(false);
   const [isTradeJournalOpen, setIsTradeJournalOpen] = useState<boolean>(false);
+  const [isCopilotOpen, setIsCopilotOpen] = useState<boolean>(false);
+  const [copilotInitialQuery, setCopilotInitialQuery] = useState<string>("");
   const [availableMargin, setAvailableMargin] = useState<number>(1000000.0);
   const [positions, setPositions] = useState<ActivePosition[]>([]);
   const [orders, setOrders] = useState<ExecutedOrder[]>([]);
@@ -736,6 +740,36 @@ export default function HomePage() {
                   })()}
                 </div>
 
+                {/* AI Neural Trade Engine Command Banner */}
+                <AIPredictionBadge
+                  symbol={currentStock.symbol}
+                  price={currentStock.lastClose}
+                  currency={currentStock.currency}
+                  changePercent={currentStock.changePercent}
+                  rsi14={currentStock.rsi14}
+                  macd={currentStock.macd}
+                  macdSignal={currentStock.macdSignal}
+                  sma20={currentStock.sma20}
+                  sma50={currentStock.sma50}
+                  volatility={currentStock.volatility}
+                  onTradeSignal={(action, target, stop) => {
+                    soundEngine.playOrderFilled();
+                    handleExecuteOrder({
+                      symbol: currentStock.symbol,
+                      side: action,
+                      product: "MIS",
+                      orderType: "MARKET",
+                      quantity: 25,
+                      price: currentStock.lastClose,
+                      marginRequired: (currentStock.lastClose * 25) / 5,
+                    });
+                  }}
+                  onOpenCopilot={(q) => {
+                    setCopilotInitialQuery(q || `Analyze ${currentStock.symbol} AI signals`);
+                    setIsCopilotOpen(true);
+                  }}
+                />
+
                 {/* Candlestick & Volume Chart (HTML5 Canvas 60 FPS) */}
                 <PriceChart
                   symbol={currentStock.symbol}
@@ -1079,6 +1113,22 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
+
+      {/* Floating Global AI Trading Copilot */}
+      <FloatingAICopilot
+        currentSymbol={currentStock.symbol}
+        currentPrice={currentStock.lastClose}
+        currency={currentStock.currency}
+        rsi14={currentStock.rsi14}
+        macd={currentStock.macd}
+        macdSignal={currentStock.macdSignal}
+        sma20={currentStock.sma20}
+        sma50={currentStock.sma50}
+        volatility={currentStock.volatility}
+        isOpenExternal={isCopilotOpen}
+        onCloseExternal={() => setIsCopilotOpen(false)}
+        initialQuery={copilotInitialQuery}
+      />
     </div>
   );
 }
