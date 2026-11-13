@@ -47,31 +47,71 @@ import {
   Sliders,
 } from "lucide-react";
 
-// Deterministic mock datasets for Indian & US stocks to support static export
-function generateMockBars(basePrice: number, days: number = 100): OHLCVBar[] {
+// Deterministic, symbol-unique mock datasets for Indian & US stocks
+function generateMockBars(symbol: string, targetPrice: number, days: number = 260): OHLCVBar[] {
   const bars: OHLCVBar[] = [];
-  let price = basePrice;
-  const startDate = new Date("2026-05-15T00:00:00Z");
+  // Unique deterministic hash from symbol characters
+  let seed = 0;
+  for (let idx = 0; idx < symbol.length; idx++) {
+    seed = (seed * 31 + symbol.charCodeAt(idx)) & 0xffffffff;
+  }
+  const uSeed = Math.abs(seed);
+
+  // Symbol-specific harmonic cycles and volatility parameters
+  const cycle1 = 0.04 + (uSeed % 11) * 0.012;
+  const cycle2 = 0.015 + ((uSeed >> 3) % 9) * 0.006;
+  const phase1 = (uSeed % 19) * 0.35;
+  const phase2 = ((uSeed >> 5) % 17) * 0.45;
+  const volatility = 0.007 + (uSeed % 13) * 0.0012;
+  const baseVol = 2000000 + (uSeed % 15) * 800000;
+
+  // Generate relative price index walking backward from today
+  const relativePath: number[] = new Array(days).fill(0);
+  let cumulativeDrift = 0;
+  for (let i = 0; i < days; i++) {
+    const noiseRaw = Math.sin((uSeed + i * 137.5) * 12.9898) * 43758.5453;
+    const noise = (noiseRaw - Math.floor(noiseRaw)) - 0.5; // [-0.5, 0.5]
+    const macroCycle = Math.sin(i * cycle1 + phase1) * 0.07 + Math.cos(i * cycle2 + phase2) * 0.12;
+    cumulativeDrift += noise * volatility * 2.2;
+    relativePath[i] = macroCycle + cumulativeDrift;
+  }
+
+  // Anchor final bar exactly to targetPrice (zero offset on today)
+  const finalOffset = relativePath[days - 1];
+  const today = new Date("2026-11-13T00:00:00Z");
 
   for (let i = 0; i < days; i++) {
-    const curDate = new Date(startDate.getTime() + i * 86400000);
-    const changePct = Math.sin(i * 0.3) * 0.015 + Math.cos(i * 0.7) * 0.01;
-    const open = price;
-    const close = price * (1 + changePct);
-    const high = Math.max(open, close) * (1 + Math.abs(Math.sin(i)) * 0.008);
-    const low = Math.min(open, close) * (1 - Math.abs(Math.cos(i)) * 0.008);
-    const volume = Math.floor(1500000 + Math.sin(i * 0.5) * 500000);
+    const dayOffset = days - 1 - i;
+    const barDate = new Date(today.getTime() - dayOffset * 86400000);
+    const rawPct = relativePath[i] - finalOffset;
+    // Keep realistic bounded range between -35% and +35% of current price
+    const boundedPct = Math.max(-0.35, Math.min(0.40, rawPct));
+    const close = parseFloat((targetPrice * (1.0 + boundedPct)).toFixed(2));
+
+    // Realistic candlestick wicks and open
+    const candleNoise = Math.sin((uSeed + i * 73.1) * 7.123) * 1000;
+    const candleVariance = (candleNoise - Math.floor(candleNoise)) - 0.5;
+    const openOffset = (close * 0.008) * candleVariance;
+    const open = parseFloat((close - openOffset).toFixed(2));
+    
+    const wickHigh = close * (0.004 + Math.abs(candleVariance) * 0.01);
+    const wickLow = close * (0.004 + Math.abs(candleVariance) * 0.01);
+    const high = parseFloat((Math.max(open, close) + wickHigh).toFixed(2));
+    const low = parseFloat((Math.min(open, close) - wickLow).toFixed(2));
+
+    const volNoise = Math.sin(i * 0.4 + uSeed) * 0.4;
+    const volume = Math.floor(baseVol * (1 + volNoise));
 
     bars.push({
-      timestamp: curDate.toISOString().split("T")[0],
-      open: parseFloat(open.toFixed(2)),
-      high: parseFloat(high.toFixed(2)),
-      low: parseFloat(low.toFixed(2)),
-      close: parseFloat(close.toFixed(2)),
-      volume: volume,
+      timestamp: barDate.toISOString().split("T")[0],
+      open,
+      high,
+      low,
+      close,
+      volume,
     });
-    price = close;
   }
+
   return bars;
 }
 
@@ -125,7 +165,7 @@ const STOCK_DATABASE: Record<string, StockOverviewData> = {
     sharpeRatio: 1.42,
     peRatio: 24.8,
     roe: 14.5,
-    bars: generateMockBars(1330.0, 120),
+    bars: generateMockBars("RELIANCE.NS", 1337.30, 260),
     isStale: false,
     timestamp: "2026-11-12",
   },
@@ -151,7 +191,7 @@ const STOCK_DATABASE: Record<string, StockOverviewData> = {
     sharpeRatio: 1.35,
     peRatio: 26.2,
     roe: 48.0,
-    bars: generateMockBars(2465.0, 120),
+    bars: generateMockBars("TCS.NS", 2469.80, 260),
     isStale: false,
     timestamp: "2026-11-12",
   },
@@ -177,7 +217,7 @@ const STOCK_DATABASE: Record<string, StockOverviewData> = {
     sharpeRatio: 1.38,
     peRatio: 18.5,
     roe: 16.4,
-    bars: generateMockBars(808.0, 120),
+    bars: generateMockBars("HDFCBANK.NS", 810.60, 260),
     isStale: false,
     timestamp: "2026-11-12",
   },
@@ -203,7 +243,7 @@ const STOCK_DATABASE: Record<string, StockOverviewData> = {
     sharpeRatio: 1.25,
     peRatio: 25.1,
     roe: 31.8,
-    bars: generateMockBars(1150.0, 120),
+    bars: generateMockBars("INFY.NS", 1153.60, 260),
     isStale: false,
     timestamp: "2026-11-12",
   },
@@ -229,7 +269,7 @@ const STOCK_DATABASE: Record<string, StockOverviewData> = {
     sharpeRatio: 1.45,
     peRatio: 17.8,
     roe: 18.5,
-    bars: generateMockBars(1255.0, 120),
+    bars: generateMockBars("ICICIBANK.NS", 1260.00, 260),
     isStale: false,
     timestamp: "2026-11-12",
   },
@@ -255,7 +295,7 @@ const STOCK_DATABASE: Record<string, StockOverviewData> = {
     sharpeRatio: 1.20,
     peRatio: 10.4,
     roe: 17.2,
-    bars: generateMockBars(792.0, 120),
+    bars: generateMockBars("SBIN.NS", 795.00, 260),
     isStale: false,
     timestamp: "2026-11-12",
   },
@@ -281,7 +321,7 @@ const STOCK_DATABASE: Record<string, StockOverviewData> = {
     sharpeRatio: 1.10,
     peRatio: 27.5,
     roe: 28.5,
-    bars: generateMockBars(471.0, 120),
+    bars: generateMockBars("ITC.NS", 472.00, 260),
     isStale: false,
     timestamp: "2026-11-12",
   },
@@ -307,7 +347,7 @@ const STOCK_DATABASE: Record<string, StockOverviewData> = {
     sharpeRatio: 1.55,
     peRatio: 33.2,
     roe: 145.0,
-    bars: generateMockBars(345.0, 120),
+    bars: generateMockBars("AAPL", 348.50, 260),
     isStale: false,
     timestamp: "2026-11-12",
   },
@@ -333,7 +373,7 @@ const STOCK_DATABASE: Record<string, StockOverviewData> = {
     sharpeRatio: 1.62,
     peRatio: 36.4,
     roe: 38.5,
-    bars: generateMockBars(525.0, 120),
+    bars: generateMockBars("MSFT", 533.20, 260),
     isStale: false,
     timestamp: "2026-11-12",
   },
@@ -527,7 +567,7 @@ export default function HomePage() {
         sma50: indData?.sma_50 ?? q.price,
         volatility: indData?.volatility ?? 16.5,
         sharpeRatio: 1.25,
-        bars: fetchedBars.length > 0 ? fetchedBars : (STOCK_DATABASE[selectedSymbol]?.bars || generateMockBars(q.price, 60)),
+        bars: fetchedBars.length > 0 ? fetchedBars : (STOCK_DATABASE[selectedSymbol]?.bars || generateMockBars(selectedSymbol, q.price, 260)),
         isStale: false,
         timestamp: q.timestamp,
       });
@@ -574,7 +614,7 @@ export default function HomePage() {
     sma50: 150.0,
     volatility: 15.0,
     sharpeRatio: 1.0,
-    bars: generateMockBars(150.0, 60),
+    bars: generateMockBars(selectedSymbol, 150.0, 260),
     isStale: false,
     timestamp: "Recent",
   };
